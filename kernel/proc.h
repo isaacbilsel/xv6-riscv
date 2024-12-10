@@ -84,6 +84,8 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 // Per-process state
 struct proc {
   struct spinlock lock;
+  int priority;                 // ranging from 0-NQUEUES
+  int ticks;                    // # of clock cycles this has been running for
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state
@@ -104,4 +106,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+};
+
+
+struct proc_table{
+  struct proc proc[NPROC];
+  struct proc *queues[NQUEUES][NPROC];
+  int queuesize[NQUEUES];
+  int allotment[NQUEUES];
 };

@@ -45,5 +45,5 @@ https://github.com/riscv/riscv-gnu-toolchain, and qemu compiled for
 riscv64-softmmu.  Once they are installed, and in your shell
 search path, you can run "make qemu".
 
-exit shell: ctrl + A --> C --> quit
+exit shell: ctrl + A --> C --> q
 view processes: ctrl + p

@@ -8,7 +8,9 @@
 
 struct cpu cpus[NCPU];
 
-struct proc proc[NPROC];
+// TODO: Implement lock for safe access to ptable on multiple threads
+
+struct proc_table ptable;
 
 struct proc *initproc;
 
@@ -34,11 +36,11 @@ proc_mapstacks(pagetable_t kpgtbl)
 {
   struct proc *p;
   
-  for(p = proc; p < &proc[NPROC]; p++) {
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     char *pa = kalloc();
     if(pa == 0)
       panic("kalloc");
-    uint64 va = KSTACK((int) (p - proc));
+    uint64 va = KSTACK((int) (p - ptable.proc));
     kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   }
 }
@@ -47,14 +49,22 @@ proc_mapstacks(pagetable_t kpgtbl)
 void
 procinit(void)
 {
+  printf("Initializing proc table...\n");
   struct proc *p;
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  for(p = proc; p < &proc[NPROC]; p++) {
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
-      p->kstack = KSTACK((int) (p - proc));
+      p->kstack = KSTACK((int) (p - ptable.proc));
+      p->priority = NQUEUES;   // set to max priority
+  }
+  
+  // Initilize queue heads
+  int j;
+  for(j=0; j<NQUEUES; j++){
+    ptable.queuesize[j] = 0;
   }
 }
 
@@ -111,7 +121,7 @@ allocproc(void)
 {
   struct proc *p;
 
-  for(p = proc; p < &proc[NPROC]; p++) {
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
       goto found;
@@ -232,6 +242,8 @@ uchar initcode[] = {
 void
 userinit(void)
 {
+  printf("Setting up first process\n");
+
   struct proc *p;
 
   p = allocproc();
@@ -250,6 +262,11 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+
+  // Add this runnable process to the MLFQ
+  ptable.queues[NQUEUES-1][0] = p;  
+  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC) panic("queue overflow");
+  else ptable.queuesize[NQUEUES-1]++; 
 
   release(&p->lock);
 }
@@ -320,6 +337,12 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+
+  // Add this runnable process to the MLFQ
+  ptable.queues[NQUEUES-1][0] = np;  
+  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC) panic("queue overflow");
+  else ptable.queuesize[NQUEUES-1]++; 
+
   release(&np->lock);
 
   return pid;
@@ -332,7 +355,7 @@ reparent(struct proc *p)
 {
   struct proc *pp;
 
-  for(pp = proc; pp < &proc[NPROC]; pp++){
+  for(pp = ptable.proc; pp < &ptable.proc[NPROC]; pp++){
     if(pp->parent == p){
       pp->parent = initproc;
       wakeup(initproc);
@@ -399,7 +422,7 @@ wait(uint64 addr)
   for(;;){
     // Scan through table looking for exited children.
     havekids = 0;
-    for(pp = proc; pp < &proc[NPROC]; pp++){
+    for(pp = ptable.proc; pp < &ptable.proc[NPROC]; pp++){
       if(pp->parent == p){
         // make sure the child isn't still in exit() or swtch().
         acquire(&pp->lock);
@@ -446,6 +469,8 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int i, j;
+  printf("Entering scheduler...\n");
 
   c->proc = 0;
   for(;;){
@@ -455,24 +480,33 @@ scheduler(void)
     intr_on();
 
     int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    
+    
+    for (i=NQUEUES-1; i>-1; i--){  // loop through set of queues
+      for (j=0; j<ptable.queuesize[i]; j++){ // RR on each queue
+        if (ptable.queues[i][j]->state == RUNNABLE){    // verify that it is runnable
+          p = ptable.queues[i][j];
+          acquire(&p->lock);
+          if(p->state == RUNNABLE) {
+            // Switch to chosen process.  It is the process's job
+            // to release its lock and then reacquire it
+            // before jumping back to us.
+            p->state = RUNNING;
+            c->proc = p;
+            swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+            // Process is done running for now.
+            // It should have changed its p->state before coming back.
+            c->proc = 0;
+            found = 1;
+          }
+          release(&p->lock);
+        }
       }
-      release(&p->lock);
     }
+
     if(found == 0) {
+      // printf("No procs found found\n");
       // nothing to run; stop running on this core until an interrupt.
       intr_on();
       asm volatile("wfi");
@@ -580,7 +614,7 @@ wakeup(void *chan)
 {
   struct proc *p;
 
-  for(p = proc; p < &proc[NPROC]; p++) {
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
@@ -599,7 +633,7 @@ kill(int pid)
 {
   struct proc *p;
 
-  for(p = proc; p < &proc[NPROC]; p++){
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     acquire(&p->lock);
     if(p->pid == pid){
       p->killed = 1;
@@ -682,7 +716,7 @@ procdump(void)
   char *state;
 
   printf("\n");
-  for(p = proc; p < &proc[NPROC]; p++){
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
     if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
