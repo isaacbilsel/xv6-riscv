@@ -54,6 +54,7 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  initlock(&ptable.lock, "table_lock");
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -264,10 +265,11 @@ userinit(void)
   p->state = RUNNABLE;
 
   // Add this runnable process to the MLFQ
+  acquire(&ptable.lock);
   ptable.queues[NQUEUES-1][0] = p;  
   if (ptable.queuesize[NQUEUES-1] +1 >= NPROC) panic("queue overflow");
   else ptable.queuesize[NQUEUES-1]++; 
-
+  release(&ptable.lock);
   release(&p->lock);
 }
 
@@ -339,17 +341,23 @@ fork(void)
   np->state = RUNNABLE;
 
   // Add this runnable process to the MLFQ
+  acquire(&ptable.lock);
   ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = np;  
-  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC) panic("queue overflow");
-  else ptable.queuesize[NQUEUES-1]++; 
-
+  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC){
+    printf("Queue overflow\n ");
+    release(&ptable.lock);
+    release(&np->lock);
+    return -1; //panic("queue overflow");
+  }
+  ptable.queuesize[NQUEUES-1]++; 
+  release(&ptable.lock);
   release(&np->lock);
 
   return pid;
 }
 
 // Pass p's abandoned children to init.
-// Caller must hold wait_lock.
+// Caller must hold wait_lock
 void
 reparent(struct proc *p)
 {
