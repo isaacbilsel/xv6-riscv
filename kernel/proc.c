@@ -339,7 +339,7 @@ fork(void)
   np->state = RUNNABLE;
 
   // Add this runnable process to the MLFQ
-  ptable.queues[NQUEUES-1][0] = np;  
+  ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = np;  
   if (ptable.queuesize[NQUEUES-1] +1 >= NPROC) panic("queue overflow");
   else ptable.queuesize[NQUEUES-1]++; 
 
