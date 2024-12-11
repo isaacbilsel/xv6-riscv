@@ -17,6 +17,7 @@ struct spinlock pid_lock;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
+void rmv_proc(struct proc *queue[], int index, int size);
 
 extern char trampoline[]; // trampoline.S
 
@@ -50,6 +51,12 @@ procinit(void)
   printf("Initializing proc table...\n");
   struct proc *p;
   
+  // Initialize time slice allotments for each priority level
+  ptable.allotment[3] = MINSLICE;
+  ptable.allotment[2] = LOWSLICE;
+  ptable.allotment[1] = HIGHSLICE;
+  ptable.allotment[0] = MAXSLICE;
+
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   initlock(&ptable.lock, "table_lock");
@@ -57,7 +64,8 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - ptable.proc));
-      p->priority = NQUEUES;   // set to max priority
+      p->priority = NQUEUES;                        // set to max priority
+      p->allotment = ptable.allotment[NQUEUES-1];   // set to min allotment
   }
   
   // Initilize queue heads
@@ -65,12 +73,7 @@ procinit(void)
   for(j=0; j<NQUEUES; j++){
     ptable.queuesize[j] = 0;
   }
-  // Initialize time slice allotments for each priority level
-  ptable.allotment[3] = MINSLICE;
-  ptable.allotment[2] = LOWSLICE;
-  ptable.allotment[1] = HIGHSLICE;
-  ptable.allotment[0] = MAXSLICE;
-
+  
 }
 
 // Must be called with interrupts disabled,
@@ -172,11 +175,14 @@ found:
     return 0; 
   }
   ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = p; 
+  p->queueslot = ptable.queuesize[NQUEUES-1];
   ptable.queuesize[NQUEUES-1]++; 
   release(&ptable.lock);
 
   return p;
 }
+
+// ***Update this to include pop from queue ***
 
 // free a proc structure and the data hanging from it,
 // including user pages.
@@ -493,6 +499,7 @@ scheduler(void)
     
     for (i=NQUEUES-1; i>-1; i--){  // loop through set of queues
       for (j=0; j<ptable.queuesize[i]; j++){ // RR on each queue
+        // if (ptable.queues[i][j] == 0) break;    // This proc has been removed from queue
         if (ptable.queues[i][j]->state == RUNNABLE){    // verify that it is runnable
           p = ptable.queues[i][j];
           acquire(&p->lock);
@@ -552,11 +559,36 @@ sched(void)
 
 // Give up the CPU for one scheduling round.
 void
-yield(void)
+yield(int inter) 
 {
   struct proc *p = myproc();
   acquire(&p->lock);
+  
+  // Update priority
+  acquire(&ptable.lock);
+  if(inter == 1){   // Clock interrupt, lower priority
+    // ptable.queues[p->priority][p->queueslot] = 0;
+
+    // Decrease priority and add to lower queue
+    if (p->priority != 0) p->priority--; 
+    if (ptable.queuesize[p->priority] +1 >= NPROC){
+      printf("Queue overflow on queue: %d\n", p->priority);
+      freeproc(p);
+      release(&ptable.lock);
+      release(&p->lock);
+      return; 
+    }
+    ptable.queues[p->priority][ptable.queuesize[p->priority]] = p; 
+    p->queueslot = ptable.queuesize[p->priority];
+    ptable.queuesize[p->priority]++; 
+
+    // Remove the pointer in the old queue
+    rmv_proc(ptable.queues[p->priority], p->queueslot, ptable.queuesize[p->priority]);
+  }
+
+  // Else, voluntarily giving up CPU, no change in priority 
   p->state = RUNNABLE;
+  release(&ptable.lock);
   sched();
   release(&p->lock);
 }
@@ -732,7 +764,14 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s", p->pid, state, p->name);
+    printf("%d %s %s Priority: %d", p->pid, state, p->name, p->priority);
     printf("\n");
+  }
+}
+
+void rmv_proc(struct proc *queue[], int index, int size){
+  int i;
+  for(i = index; i < size - 1; i++){
+    queue[i] = queue[i + 1];
   }
 }
