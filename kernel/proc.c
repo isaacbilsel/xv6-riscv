@@ -342,13 +342,13 @@ fork(void)
 
   // Add this runnable process to the MLFQ
   acquire(&ptable.lock);
-  ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = np;  
   if (ptable.queuesize[NQUEUES-1] +1 >= NPROC){
     printf("Queue overflow\n ");
     release(&ptable.lock);
     release(&np->lock);
     return -1; //panic("queue overflow");
   }
+  ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = np; 
   ptable.queuesize[NQUEUES-1]++; 
   release(&ptable.lock);
   release(&np->lock);
