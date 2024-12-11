@@ -8,8 +8,6 @@
 
 struct cpu cpus[NCPU];
 
-// TODO: Implement lock for safe access to ptable on multiple threads
-
 struct proc_table ptable;
 
 struct proc *initproc;
@@ -163,6 +161,20 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // Add this runnable process to the MLFQ
+  // Still need to make this circular queue to handle queue overflow
+  acquire(&ptable.lock);
+  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC){
+    printf("Queue overflow\n ");
+    freeproc(p);
+    release(&ptable.lock);
+    release(&p->lock);
+    return 0; 
+  }
+  ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = p; 
+  ptable.queuesize[NQUEUES-1]++; 
+  release(&ptable.lock);
+
   return p;
 }
 
@@ -270,12 +282,6 @@ userinit(void)
 
   p->state = RUNNABLE;
 
-  // Add this runnable process to the MLFQ
-  acquire(&ptable.lock);
-  ptable.queues[NQUEUES-1][0] = p;  
-  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC) panic("queue overflow");
-  else ptable.queuesize[NQUEUES-1]++; 
-  release(&ptable.lock);
   release(&p->lock);
 }
 
@@ -346,17 +352,6 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
 
-  // Add this runnable process to the MLFQ
-  acquire(&ptable.lock);
-  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC){
-    printf("Queue overflow\n ");
-    release(&ptable.lock);
-    release(&np->lock);
-    return -1; //panic("queue overflow");
-  }
-  ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = np; 
-  ptable.queuesize[NQUEUES-1]++; 
-  release(&ptable.lock);
   release(&np->lock);
 
   return pid;

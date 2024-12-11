@@ -21,7 +21,7 @@ forktest(void)
   print("fork test\n");
 
   for(n=0; n<N; n++){
-    print("Forking...");
+    // print("Forking...");
     pid = fork();
     if(pid < 0)
       break;
@@ -29,7 +29,7 @@ forktest(void)
       exit(0);
   }
 
-  print("passed first loop\n");
+  // print("passed first loop\n");
 
   if(n == N){
     print("fork claimed to work N times!\n");
@@ -37,7 +37,7 @@ forktest(void)
   }
 
   for(; n > 0; n--){
-    print("waiting... ");
+    // print("waiting... ");
     if(wait(0) < 0){
       print("wait stopped early\n");
       exit(1);
