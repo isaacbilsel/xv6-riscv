@@ -67,6 +67,12 @@ procinit(void)
   for(j=0; j<NQUEUES; j++){
     ptable.queuesize[j] = 0;
   }
+  // Initialize time slice allotments for each priority level
+  ptable.allotment[3] = MINSLICE;
+  ptable.allotment[2] = LOWSLICE;
+  ptable.allotment[1] = HIGHSLICE;
+  ptable.allotment[0] = MAXSLICE;
+
 }
 
 // Must be called with interrupts disabled,
