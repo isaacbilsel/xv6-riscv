@@ -14,8 +14,9 @@
 #define USERSTACK    1     // user stack pages
 
 #define NQUEUES      4      // number of priority levels in MLFQ
+#define QSIZE        512 
 
-#define MAXSLICE     640
-#define HIGHSLICE    320
-#define LOWSLICE     160
-#define MINSLICE     80
+#define MAXSLICE     256
+#define HIGHSLICE    128
+#define LOWSLICE     64
+#define MINSLICE     32

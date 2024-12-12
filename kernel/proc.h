@@ -114,7 +114,7 @@ struct proc {
 struct proc_table{
   struct spinlock lock;
   struct proc proc[NPROC];
-  struct proc *queues[NQUEUES][NPROC];
+  struct proc *queues[NQUEUES][QSIZE];
   int queuesize[NQUEUES];
   int allotment[NQUEUES];
 };

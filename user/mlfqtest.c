@@ -4,13 +4,13 @@
 #include "user/user.h"
 #include "kernel/syscall.h"
     
-#define N 10
+#define N 5
 
 void
-forktest(void){
+mlfqtest(void){
     int n, pid, i;
 
-    printf("fork test\n");
+    printf("mlfq test\n");
 
     for(n=0; n<N; n++){
         printmlfq();
@@ -26,25 +26,9 @@ forktest(void){
             exit(0);
         }
     }
-
-    /*
-    for(; n > 0; n--){
-        // print("waiting... ");
-        if(wait(0) < 0){
-            printf("wait stopped early\n");
-            exit(1);
-        }
-    }
-
-    if(wait(0) != -1){
-    printf("wait got too many\n");
-    exit(1);
-    }
-    printf("fork test OK\n");
-    */
 }
 
 int main(int argc, char *argv[]) { 
-    forktest();
+    mlfqtest();
     exit(0); 
 } 

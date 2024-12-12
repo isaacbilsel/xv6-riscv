@@ -167,7 +167,7 @@ found:
   // Add this runnable process to the MLFQ
   // Still need to make this circular queue to handle queue overflow
   acquire(&ptable.lock);
-  if (ptable.queuesize[NQUEUES-1] +1 >= NPROC){
+  if (ptable.queuesize[NQUEUES-1] +1 >= QSIZE){
     printf("Queue overflow\n ");
     freeproc(p);
     release(&ptable.lock);
@@ -580,12 +580,13 @@ yield(int inter)
     // ptable.queues[p->priority][p->queueslot] = 0;
 
     // Decrease priority and add to lower queue
-    if ((p->priority != 0) && (p->pid > 3)){
-      printf("Decrementing priority of pid %d\n", p->pid);
+    if ((p->priority != 0)){
+      // printf("Decrementing priority of pid %d\n", p->pid);
       p->priority--;
     }
-    if (ptable.queuesize[p->priority] +1 >= NPROC){
+    if (ptable.queuesize[p->priority] +1 >= QSIZE){
       printf("Queue overflow on queue: %d\n", p->priority);
+      printf("Queue size = %d\n", ptable.queuesize[p->priority] +1);
       freeproc(p);
       release(&ptable.lock);
       release(&p->lock);
@@ -760,6 +761,18 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
 void
 procdump(void)
 {
+  int i,j;
+  printf("\n");
+  for (i=NQUEUES-1; i>-1; i--){
+    printf("Q%d: ", i);
+    for (j=0; j<ptable.queuesize[i]; j++){
+      // if(ptable.queues[i][j]->state == UNUSED)
+      // continue;
+      printf("|PID: %d A:%d ", ptable.queues[i][j]->pid, ptable.queues[i][j]->allotment);
+    }
+    printf("\n");
+  }
+  /*
   static char *states[] = {
   [UNUSED]    "unused",
   [USED]      "used",
@@ -780,6 +793,23 @@ procdump(void)
     else
       state = "???";
     printf("%d %s %s Priority: %d, Allotment: %d", p->pid, state, p->name, p->priority, p->allotment);
+    printf("\n");
+  }
+  */
+}
+void mlfqdump(){
+  int i,j;
+  struct proc *p;
+  for (i=NQUEUES-1; i>-1; i--){
+    printf("Q%d: ", i);
+    for (j=0; j<ptable.queuesize[i]; j++){
+      p = ptable.queues[i][j];
+      acquire(&p->lock);
+      if(p->state == UNUSED)
+      continue;
+      printf("|PID: %d A:%d ", p->pid, p->allotment);
+      release(&p->lock);
+    }
     printf("\n");
   }
 }
