@@ -15,7 +15,7 @@
 
 #define NQUEUES      4      // number of priority levels in MLFQ
 
-#define MAXSLICE     64000
-#define HIGHSLICE    32000
-#define LOWSLICE     16000
-#define MINSLICE     8000
+#define MAXSLICE     640
+#define HIGHSLICE    320
+#define LOWSLICE     160
+#define MINSLICE     80

@@ -64,7 +64,7 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - ptable.proc));
-      p->priority = NQUEUES;                        // set to max priority
+      p->priority = NQUEUES-1;                        // set to max priority
       p->allotment = ptable.allotment[NQUEUES-1];   // set to min allotment
   }
   
@@ -190,6 +190,13 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  
+  // Update ptable
+  // acquire(&ptable.lock);
+  
+  // release(&ptable.lock);
+  
+
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -204,6 +211,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->allotment = ptable.allotment[NQUEUES-1];
+  p->priority = NQUEUES-1;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -453,6 +462,7 @@ wait(uint64 addr)
             return -1;
           }
           freeproc(pp);
+
           release(&pp->lock);
           release(&wait_lock);
           return pid;
@@ -570,7 +580,10 @@ yield(int inter)
     // ptable.queues[p->priority][p->queueslot] = 0;
 
     // Decrease priority and add to lower queue
-    if (p->priority != 0) p->priority--; 
+    if ((p->priority != 0) && (p->pid > 3)){
+      printf("Decrementing priority of pid %d\n", p->pid);
+      p->priority--;
+    }
     if (ptable.queuesize[p->priority] +1 >= NPROC){
       printf("Queue overflow on queue: %d\n", p->priority);
       freeproc(p);
@@ -581,9 +594,11 @@ yield(int inter)
     ptable.queues[p->priority][ptable.queuesize[p->priority]] = p; 
     p->queueslot = ptable.queuesize[p->priority];
     ptable.queuesize[p->priority]++; 
+    p->allotment = ptable.allotment[p->priority];
 
     // Remove the pointer in the old queue
     rmv_proc(ptable.queues[p->priority], p->queueslot, ptable.queuesize[p->priority]);
+    ptable.queuesize[p->priority+1]--;
   }
 
   // Else, voluntarily giving up CPU, no change in priority 
@@ -764,7 +779,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s Priority: %d", p->pid, state, p->name, p->priority);
+    printf("%d %s %s Priority: %d, Allotment: %d", p->pid, state, p->name, p->priority, p->allotment);
     printf("\n");
   }
 }

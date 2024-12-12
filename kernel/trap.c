@@ -84,6 +84,7 @@ usertrap(void)
       release(&p->lock);
       yield(1);
     }
+    else release(&p->lock);
   }
 
   usertrapret();
