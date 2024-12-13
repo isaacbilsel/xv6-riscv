@@ -85,9 +85,8 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
   int priority;                 // ranging from 0-NQUEUES
-  int ticks;                    // # of clock cycles this has been running for
+  int queueslot;                // Placement in queue
   int allotment;                // Allowed time slice for this priority level
-  int queueslot;                // Store where in the queue this proc is (needed when it is removed from this queue)
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state

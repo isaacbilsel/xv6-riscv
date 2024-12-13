@@ -48,7 +48,6 @@ proc_mapstacks(pagetable_t kpgtbl)
 void
 procinit(void)
 {
-  printf("Initializing proc table...\n");
   struct proc *p;
   
   // Initialize time slice allotments for each priority level
@@ -276,7 +275,7 @@ uchar initcode[] = {
 void
 userinit(void)
 {
-  printf("Setting up first process\n");
+  // printf("Setting up first process\n");
 
   struct proc *p;
 
@@ -495,7 +494,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   int i, j;
-  printf("Entering scheduler...\n");
+  // printf("Entering scheduler...\n");
 
   c->proc = 0;
   for(;;){
@@ -505,32 +504,25 @@ scheduler(void)
     intr_on();
 
     int found = 0;
-    
-    
+
     for (i=NQUEUES-1; i>-1; i--){  // loop through set of queues
       for (j=0; j<ptable.queuesize[i]; j++){ // RR on each queue
-        // if (ptable.queues[i][j] == 0) break;    // This proc has been removed from queue
-        if (ptable.queues[i][j]->state == RUNNABLE){    // verify that it is runnable
-          p = ptable.queues[i][j];
-          acquire(&p->lock);
-          if(p->state == RUNNABLE) {
-            // Switch to chosen process.  It is the process's job
-            // to release its lock and then reacquire it
-            // before jumping back to us.
-            p->state = RUNNING;
-            c->proc = p;
-            swtch(&c->context, &p->context);
+        p = ptable.queues[i][j];
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {       
+          // Switch to chosen process.                                  It is the process's job to release its lock and then reacquire it before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
 
-            // Process is done running for now.
-            // It should have changed its p->state before coming back.
-            c->proc = 0;
-            found = 1;
-          }
-          release(&p->lock);
+          // Process is done running for now.                                 // It should have changed its p->state before coming back.
+          c->proc = 0;
+          found = 1;
         }
+        release(&p->lock);
       }
     }
-
+  
     if(found == 0) {
       // printf("No procs found found\n");
       // nothing to run; stop running on this core until an interrupt.
@@ -577,16 +569,14 @@ yield(int inter)
   // Update priority
   acquire(&ptable.lock);
   if(inter == 1){   // Clock interrupt, lower priority
-    // ptable.queues[p->priority][p->queueslot] = 0;
-
-    // Decrease priority and add to lower queue
+    // Decrease priority
     if ((p->priority != 0)){
-      // printf("Decrementing priority of pid %d\n", p->pid);
       p->priority--;
     }
+
+    // Add to lower queue
     if (ptable.queuesize[p->priority] +1 >= QSIZE){
       printf("Queue overflow on queue: %d\n", p->priority);
-      printf("Queue size = %d\n", ptable.queuesize[p->priority] +1);
       freeproc(p);
       release(&ptable.lock);
       release(&p->lock);
@@ -675,6 +665,8 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
+        // ptable.queuesize[p->priority]++;
+        // ptable.queues[p->priority][ptable.queuesize[p->priority]] = p;
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -696,6 +688,8 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
+        // ptable.queuesize[p->priority]++;
+        // ptable.queues[p->priority][ptable.queuesize[p->priority]] = p;
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -755,6 +749,46 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
   }
 }
 
+void rmv_proc(struct proc *queue[], int index, int size){
+  int i;
+  for(i = index; i < size - 1; i++){
+    queue[i] = queue[i + 1];
+  }
+}
+
+
+void priorityboost(){
+  int i,j;
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for (i=NQUEUES-1; i>-1; i--){  // loop through set of queues
+      for (j=0; j<ptable.queuesize[i]; j++){ // RR on each queue
+        if (ptable.queues[i][j]->state == RUNNABLE){    // verify that it is runnable
+          p = ptable.queues[i][j];
+          acquire(&p->lock);
+
+          // Remove pointer from lower queue
+          rmv_proc(ptable.queues[i], j, ptable.queuesize[i]);
+          ptable.queuesize[i]--;
+
+          // Add to top queue
+          if (ptable.queuesize[NQUEUES-1] +1 >= QSIZE){
+            printf("Queue overflow\n ");
+            freeproc(p);
+            release(&ptable.lock);
+            release(&p->lock);
+            return; 
+          }
+          ptable.queues[NQUEUES-1][ptable.queuesize[NQUEUES-1]] = p; 
+          p->queueslot = ptable.queuesize[NQUEUES-1];
+          ptable.queuesize[NQUEUES-1]++; 
+        }
+      }
+  }
+  release(&ptable.lock);
+}
+
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
@@ -772,6 +806,7 @@ procdump(void)
     }
     printf("\n");
   }
+}
   /*
   static char *states[] = {
   [UNUSED]    "unused",
@@ -795,7 +830,7 @@ procdump(void)
     printf("%d %s %s Priority: %d, Allotment: %d", p->pid, state, p->name, p->priority, p->allotment);
     printf("\n");
   }
-  */
+  
 }
 void mlfqdump(){
   int i,j;
@@ -813,10 +848,5 @@ void mlfqdump(){
     printf("\n");
   }
 }
+*/
 
-void rmv_proc(struct proc *queue[], int index, int size){
-  int i;
-  for(i = index; i < size - 1; i++){
-    queue[i] = queue[i + 1];
-  }
-}

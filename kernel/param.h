@@ -20,3 +20,5 @@
 #define HIGHSLICE    128
 #define LOWSLICE     64
 #define MINSLICE     32
+
+#define BOOST        10000

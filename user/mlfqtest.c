@@ -4,11 +4,11 @@
 #include "user/user.h"
 #include "kernel/syscall.h"
     
-#define N 5
+#define N 16
 
 void
 mlfqtest(void){
-    int n, pid, i;
+    int n, pid;
 
     printf("mlfq test\n");
 
@@ -18,12 +18,8 @@ mlfqtest(void){
         if(pid < 0)
             break;
         if(pid == 0){
-            i=0; 
-            while(i<50000) {
-                i++;
-                sleep(10);
-            }
-            exit(0);
+            sleep(500000);
+        exit(0);
         }
     }
 }
