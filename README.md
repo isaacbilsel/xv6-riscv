@@ -23,10 +23,9 @@ The goal of this project was to implement a Multi-level Feedback Queue (MLFQ) to
 #### mlfqtest.c
 - This testing script creates an artificial workload to test the MLFQ by calling fork() and spinning at each child.
 
-
-
-
-#### BUILDING AND RUNNING XV6
+<br>
+<br>
+### BUILDING AND RUNNING XV6
 
 You will need a RISC-V "newlib" tool chain from
 https://github.com/riscv/riscv-gnu-toolchain, and qemu compiled for riscv64-softmmu.  Once they are installed, and in your shell search path, you can run "make qemu".
